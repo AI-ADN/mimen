@@ -138,20 +138,23 @@ export function Journey({ isMobile, reducedMotion, paused, onTogglePause, onPast
         try {
           const res = await fetch(src, { signal: controller.signal });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const url = URL.createObjectURL(await res.blob());
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob.type ? blob : new Blob([blob], { type: 'video/mp4' }));
           urls.push(url);
           const video = videos[i];
           if (!video || controller.signal.aborted) continue;
-          video.addEventListener(
-            'loadeddata',
-            () => {
-              readyRef.current[i] = true;
-              video.dataset.ready = '';
-              requestTick();
-            },
-            { once: true },
-          );
+          const markReady = () => {
+            if (readyRef.current[i]) return;
+            readyRef.current[i] = true;
+            video.dataset.ready = '';
+            requestTick();
+          };
+          video.addEventListener('loadedmetadata', markReady, { once: true });
+          video.addEventListener('loadeddata', markReady, { once: true });
+          video.preload = 'auto';
           video.src = url;
+          video.load();
+          primeDecoder(video);
         } catch (err) {
           if (controller.signal.aborted) return;
           console.warn(`[MIMEN] No se pudo cargar ${src}; se mantiene el póster.`, err);
@@ -159,8 +162,14 @@ export function Journey({ isMobile, reducedMotion, paused, onTogglePause, onPast
       }
     })();
 
+    const primeOnGesture = () => videos.forEach((v) => v?.src && primeDecoder(v));
+    window.addEventListener('touchstart', primeOnGesture, { once: true, passive: true });
+    window.addEventListener('pointerdown', primeOnGesture, { once: true });
+
     return () => {
       controller.abort();
+      window.removeEventListener('touchstart', primeOnGesture);
+      window.removeEventListener('pointerdown', primeOnGesture);
       videos.forEach((v) => {
         if (!v) return;
         v.removeAttribute('src');
@@ -314,6 +323,15 @@ export function Journey({ isMobile, reducedMotion, paused, onTogglePause, onPast
       </div>
     </section>
   );
+}
+
+/**
+ * iOS Safari won't decode frames for a video that has never played, so scroll seeking shows only the poster.
+ * A muted play/pause unlocks it; Low Power Mode rejects this without a user gesture, hence the retry on first touch.
+ */
+function primeDecoder(video: HTMLVideoElement) {
+  const attempt = video.play();
+  if (attempt) attempt.then(() => video.pause()).catch(() => {});
 }
 
 function MiniProgress() {

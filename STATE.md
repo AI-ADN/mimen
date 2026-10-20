@@ -1,5 +1,17 @@
 # STATE.md — MIMEN
 
+## 2026-10-19 (noche) — Videos en Safari de iPhone
+
+### Problema
+- En Safari de iPhone solo se veía el póster: iOS no carga ni decodifica un video que nunca se ha reproducido (`preload="none"` + `loadeddata` que nunca llega), así que el scroll nunca movía `currentTime`.
+
+### Solución (`Journey.tsx`)
+- Al asignar el blob: `preload = 'auto'`, `load()` y `primeDecoder()` (play/pause en silencio). Listo con `loadedmetadata` o `loadeddata`. Se repite el primado en el primer `touchstart`/`pointerdown` porque el Modo de Bajo Consumo rechaza `play()` sin gesto del usuario. Blob con tipo `video/mp4` forzado si el servidor no lo envía.
+
+### Verificado
+- `scripts/webkit-check.mjs` (Playwright WebKit, iPhone 13 emulado): los 4 videos quedan listos y siguen el scroll; sin errores. WebKit de escritorio no aplica las restricciones de autoplay de iOS. **Pendiente: confirmar en un iPhone real**, incluido el Modo de Bajo Consumo.
+- Con «Reducir movimiento» activado en iOS, el sitio muestra pósteres fijos por diseño.
+
 ## 2026-10-19 (tarde, 2) — Natación cenital y gym sin polvo
 
 ### Completado
